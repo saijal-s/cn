@@ -1,0 +1,201 @@
+
+set val(stop) 10.0
+set ns [new Simulator]
+set tf [open lab5.tr w]
+$ns trace-all $tf
+set nf [open lab5.nam w]
+$ns namtrace-all $nf
+
+proc finish { } {
+global nf tf ns
+$ns flush-trace
+close $nf
+close $tf
+exec nam lab5.nam &
+exit
+}
+
+set n0 [$ns node]
+set n1 [$ns node]
+set n2 [$ns node]
+set n3 [$ns node]
+set n4 [$ns node]
+set n5 [$ns node]
+
+$ns duplex-link $n0 $n2 10Mb 10ms DropTail
+$ns queue-limit $n0 $n2 5
+$ns duplex-link $n1 $n2 100Mb 10ms DropTail
+$ns queue-limit $n1 $n2 50
+$ns duplex-link $n2 $n3 100Mb 10ms DropTail
+$ns queue-limit $n2 $n3 50
+$ns duplex-link $n3 $n4 100Mb 10ms DropTail
+$ns queue-limit $n3 $n4 50
+$ns duplex-link $n3 $n5 0.5Mb 10ms DropTail
+$ns queue-limit $n3 $n5 5
+
+
+$ns duplex-link-op $n0 $n2 orient right-down
+$ns duplex-link-op $n1 $n2 orient right-up
+$ns duplex-link-op $n2 $n3 orient right
+$ns duplex-link-op $n3 $n4 orient right-up
+$ns duplex-link-op $n3 $n5 orient right-down
+
+set tcp0 [new Agent/TCP]
+$ns attach-agent $n0 $tcp0
+set sink2 [new Agent/TCPSink]
+$ns attach-agent $n4 $sink2
+$ns connect $tcp0 $sink2
+$tcp0 set packetSize_ 1500
+
+set tcp1 [new Agent/TCP]
+$ns attach-agent $n1 $tcp1
+set sink3 [new Agent/TCPSink]
+$ns attach-agent $n5 $sink3
+$ns connect $tcp1 $sink3
+$tcp1 set packetSize_ 1500
+
+set ftp0 [new Application/FTP]
+$ftp0 attach-agent $tcp0
+$ns at 0.1 "$ftp0 start"
+$ns at 5.0 "$ftp0 stop"
+
+set telnet [new Application/Telnet]
+$telnet attach-agent $tcp1
+$ns at 0.1 "$telnet start"
+$ns at 5.0 "$telnet stop"
+
+set udp0 [new Agent/UDP]
+$ns attach-agent $n0 $udp0
+set null0 [new Agent/Null]
+$ns attach-agent $n5 $null0
+$ns connect $udp0 $null0
+$udp0 set packetSize_ 1500
+
+set udp1 [new Agent/UDP]
+$ns attach-agent $n1 $udp1
+set null1 [new Agent/Null]
+$ns attach-agent $n4 $null1
+$ns connect $udp1 $null1
+$udp1 set packetSize_ 1500
+
+set pareto [new Application/Traffic/Pareto]
+$pareto attach-agent $udp0
+$ns at 0.2 "$pareto start"
+$ns at 5.0 "$pareto stop"
+
+set exponential [new Application/Traffic/Exponential]
+$exponential attach-agent $udp1
+$ns at 0.2 "$exponential start"
+$ns at 5.0 "$exponential stop"
+
+
+$ns at $val(stop) "$ns nam-end-wireless $val(stop)"
+$ns at $val(stop) "finish"
+$ns at $val(stop) "puts \"done\":$ns halt"
+$ns run
+
+------------------------------------------AWK FILES--------------------------------------------------------
+
+pareto awk file:
+
+BEGIN {
+sum=0;
+}
+{
+        if($1=="r" && $3=="0" && $4=="2" && ($5=="pareto"))
+        {       printf("%f \t %f \n",sum+$2,$2);
+                sum+=$6;
+        }
+}
+END {
+ #printf("Throughput of Pareto : %f Mbps\n",(ftppack/ftptime)*(8/1000000));
+}
+
+exponential awk:
+
+BEGIN {
+sum=0;
+}
+{
+        if($1=="r" && $3=="1" && $4=="2" && $5=="exp")
+        {       printf("%f \t %f \n",sum+$2,$2);
+                sum+=$6;
+        }
+}
+END {
+ #printf("%f",(telepack/teletime)*(8/1000000));
+}
+
+ftp-awk
+BEGIN {
+sSize = 0;
+startTime = 5.0;
+stopTime = 0.1;
+Tput = 0;
+}{
+
+size = $6;
+if($1 == "+")
+{
+if($2 < startTime)
+{
+startTime = $2;
+}
+}
+if($1 == "r")
+{
+if($2 > stopTime)
+{
+stopTime = time;
+} sSize += sizes;
+}
+Tput = (sSize / (stopTime-startTime))*(8/1000);
+}
+END {
+
+printf("TIME:", time);
+printf("Throughput:", Tput);
+}
+
+tel-awk
+
+BEGIN {
+sSize = 0;
+startTime = 5.0;
+stopTime = 0.1;
+Tput = 0;
+}{
+event = $1;
+time = $2;
+size = $6;
+if(event == "+")
+{
+if(time < startTime)
+{
+startTime = time;
+}
+}
+if(event == "r")
+{
+if(time < startTime)
+{
+startTime = time;
+}
+}
+if(event == "r")
+{
+if(time > stopTime)
+{
+stopTime = time;
+} sSize += size;
+}
+Tput = (sSize / (stopTime-startTime))*(8/1000);
+printf("%f\t%.2f\n", time, Tput);
+}
+END {
+;
+-------------------------------------------------------------------------------
+exec awk -f lab5ftp.awk lab5.tr > temp1 &
+exec awk -f lab5telnet.awk lab5.tr > temp2 &
+exec awk -f lab5pareto.awk lab5.tr > temp3 &
+exec awk -f lab5expo.awk lab5.tr > temp4 &
