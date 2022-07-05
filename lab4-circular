@@ -1,0 +1,133 @@
+set val(stop) 10.0
+set ns [new Simulator]
+set tracefile [open CN4.tr w]
+$ns trace-all $tracefile
+set namfile [open CN4.nam w]
+$ns namtrace-all $namfile
+
+set n0 [$ns node]
+set n1 [$ns node]
+set n2 [$ns node]
+set n3 [$ns node]
+set n4 [$ns node]
+set n5 [$ns node]
+set n6 [$ns node]
+
+$n0 color "red"
+$n6 color "red"
+$n1 color "blue"
+$n3 color "blue"
+$n0 label "TCP_SOURCE"
+$n6 label "TCP_SINK"
+$n1 label "UDP_SOURCE"
+$n3 label "UDP_SINK"
+
+
+$ns simplex-link $n0 $n1 10mb 10ms DropTail
+$ns queue-limit $n0 $n1 5
+$ns simplex-link $n1 $n2 10mb 10ms DropTail
+$ns queue-limit $n1 $n2 5
+$ns simplex-link $n2 $n3 10mb 10ms DropTail
+$ns queue-limit $n2 $n3 5
+$ns simplex-link $n3 $n4 10mb 10ms DropTail
+$ns queue-limit $n3 $n4 5
+$ns simplex-link $n4 $n5 10mb 10ms DropTail
+$ns queue-limit $n4 $n5 5
+$ns simplex-link $n5 $n6 10mb 10ms DropTail
+$ns queue-limit $n5 $n6 55
+$ns simplex-link $n6 $n0 10mb 10ms DropTail
+$ns queue-limit $n6 $n0 50
+
+$ns simplex-link-op $n0 $n1 orient right
+$ns simplex-link-op $n1 $n2 orient right-down
+$ns simplex-link-op $n2 $n3 orient left-down
+$ns simplex-link-op $n3 $n4 orient left
+$ns simplex-link-op $n4 $n5 orient left-up
+$ns simplex-link-op $n5 $n6 orient up
+$ns simplex-link-op $n6 $n0 orient right-up
+
+#Set TCP Connection
+set tcp0 [new Agent/TCP]
+$ns attach-agent $n0 $tcp0
+
+set sink1 [new Agent/TCPSink]
+$ns attach-agent $n6 $sink1
+$ns connect $tcp0 $sink1
+
+$tcp0 set packetSize_ 150
+
+
+
+#Set UDP Connection
+set udp2 [new Agent/UDP]
+$ns attach-agent $n1 $udp2
+set null3 [new Agent/Null]
+$ns attach-agent $n3 $null3
+$ns connect $udp2 $null3
+$udp2 set packetSize_ 150
+
+
+
+
+
+#Attach FTP Application over TCP
+set ftp0 [new Application/FTP]
+$ftp0 attach-agent $tcp0
+$ns at 1.0 "$ftp0 start"
+$ns at 10.0 "$ftp0 stop"
+
+#Attach CBR Application over UDP
+set cbr1 [new Application/Traffic/CBR]
+$cbr1 attach-agent $udp2
+$cbr1 set packetSize_ 100
+$cbr1 set rate_ 1.0Mb
+$cbr1 set random_ null
+
+$ns at 1.0 "$cbr1 start"
+$ns at 10.0 "$cbr1 stop"
+
+#Finish Procedure
+proc finish {} {
+global ns tracefile namfile
+$ns flush-trace
+close $tracefile
+close $namfile
+#exec awk -f 4.awk out.tr
+#Execute the nam animation file
+exec nam CN4.nam &
+exit 0
+}
+
+$ns at $val(stop) "$ns nam-end-wireless $val(stop)"
+$ns at $val(stop) "finish"
+$ns at $val(stop) "puts \"done\" :$ns halt"
+
+$ns run
+
+---------------------------------------------------------------------------------Awk file----------------------------------------------------------------
+ 
+BEGIN {
+count=0;
+new_count=0;
+recieved=0;
+}
+{
+if ($1=="+")
+{
+new_count++;
+}
+if ($1=="d")
+{
+count++;
+}
+if ($1=="r")
+{
+recieved++;
+}
+}
+END{
+printf("No of dropped pkts %d\n",count);
+printf("No of total pkts %d\n",new_count);
+printf("Percentage of dropped pkts %.2f\n",(count/new_count)*100)
+printf("No of recieved pkts %d\n",recieved);
+}
