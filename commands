@@ -1,0 +1,9 @@
+gedit filename.tcl  //to create a new TCL file
+ns filename.tcl //to run the tcl file
+
+gedit filename.awk //to create awk file
+awk -f filename.awk tracefile.tr //to run awk file
+
+awk -f filename.awk tracefile.tr > file1 //to transfer the data to file1
+
+xgraph -x "time" -y "throughput" file1 //make a graph with x axis as time and y axis as throughput 
