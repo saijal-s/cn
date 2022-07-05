@@ -32,3 +32,17 @@ $ns at 0.2 "$ftp start"
 $ns at 2.5 "$ftp stop"
 $ns at 3.0 "finish"
 $ns run
+
+------------------------------AWK FILE----------------------------------------
+BEGIN{
+c=0;
+}
+{
+if($1=="d")
+{
+c++;
+}
+}
+END{
+printf("\n No. of packets dropped = %d\n",c);
+}
